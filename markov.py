@@ -4,85 +4,131 @@ import sys
 from random import choice
 import os
 import discord
+def open_and_read_file(file_path):
+    """Take file path as string; return text as string.
+
+    Takes a string that is a file path, opens the file, and turns
+    the file's contents as one string of text.
+    """
+
+    # your code goes here
+
+    return open(file_path).read()
 
 
-def open_and_read_file(filenames):
-    """Take list of files. Open them, read them, and return one long string."""
+def make_chains(text_string, gram_num):
+    """Take input text as string; return dictionary of Markov chains.
 
-    body = ''
-    for filename in filenames:
-        text_file = open(filename)
-        body = body + text_file.read()
-        text_file.close()
+    A chain will be a key that consists of a tuple of (word1, word2)
+    and the value would be a list of the word(s) that follow those two
+    words in the input text.
 
-    return body
+    For example:
 
+        >>> chains = make_chains("hi there mary hi there juanita")
 
-def make_chains(text_string):
-    """Take input text as string; return dictionary of Markov chains."""
+    Each bigram (except the last) will be a key in chains:
 
-    chains = {}
+        >>> sorted(chains.keys())
+        [('hi', 'there'), ('mary', 'hi'), ('there', 'mary')]
+
+    Each item in chains is a list of all possible following words:
+
+        >>> chains[('hi', 'there')]
+        ['mary', 'juanita']
+        
+        >>> chains[('there','juanita')]
+        [None]
+    """
 
     words = text_string.split()
-    for i in range(len(words) - 2):
-        key = (words[i], words[i + 1])
-        value = words[i + 2]
+    chains = {}
 
-        if key not in chains:
-            chains[key] = []
+    for index in range(len(words) - gram_num):
+        #to account for unknown number of words making up chain
+        #use list slicing to grab n number of words
+        #convert that list slice back into a tuple
+        ngram = tuple(words[index:gram_num + index])
+        #the next work after n words will be the index + n
+        following_word = words[index + gram_num]
+        
+        #try to append, if key does not yet exist set an empty list first
+        chains.setdefault(ngram, []).append(following_word)
 
-        chains[key].append(value)
+        # if word_pair in chains:
+        #     chains[word_pair].append(following_word)
+        # else:
+        #     chains[word_pair] = [following_word]       
 
     return chains
 
 
 def make_text(chains):
-    """Take dictionary of Markov chains; return random text."""
+    """Return text from chains."""
 
-    keys = list(chains.keys())
-    key = choice(keys)
+    words = []
 
-    words = [key[0], key[1]]
-    while key in chains:
-        # Keep looping until we have a key that isn't in the chains
-        # (which would mean it was the end of our original text).
+    #generating a list of valid starting tuples
+    #in this case, only tuples with capitalized first words
+    starting_tuples = [word_tup for word_tup in chains
+                        if word_tup[0][0].isupper()]
 
-        # Note that for long texts (like a full book), this might mean
-        # it would run for a very long time.
+    ngram = choice(starting_tuples)
 
-        word = choice(chains[key])
-        words.append(word)
-        key = (key[1], word)
+    words.extend(ngram)
 
-    return ' '.join(words)
+    word_limit = 100
+
+    while ngram in chains:
+
+        next_word = choice(chains[ngram])
+        words.append(next_word)
+
+        #to build the next gram for an unknown length of chain
+        #use list slicing to cut out first word in tuple
+        end_of_gram = list(ngram)[1:]
+
+        #add on my following word
+        end_of_gram.append(next_word)
+
+        #convert that list back into a tuple to match keys in dictionary
+        ngram = tuple(end_of_gram)
+
+        if len(words) > word_limit:
+            break
+
+    return " ".join(words)
 
 
-# Get the filenames from the user through a command line prompt, ex:
-# python markov.py green-eggs.txt shakespeare.txt
-filenames = sys.argv[1:]
+input_path = sys.argv[1]
 
-# Open the files and turn them into one long string
-text = open_and_read_file(filenames)
+# Open the file and turn it into one long string
+input_text = open_and_read_file(input_path)
 
 # Get a Markov chain
-chains = make_chains(text)
+chains = make_chains(input_text, 2)
 
-#adding in discord posting functionality
-client = discord.Client()
+# Produce random text
+random_text = make_text(chains)
 
+print(random_text)
 
-@client.event
-async def on_ready():
-    print(f'Successfully connected! Logged in as {client.user}.')
-
-
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-
-    if message.content.startswith('$hello'):
-        await message.channel.send(chains)
+# #adding in discord posting functionality
+# client = discord.Client()
 
 
-client.run(os.environ['DISCORD_TOKEN'])
+# @client.event
+# async def on_ready():
+#     print(f'Successfully connected! Logged in as {client.user}.')
+
+
+# @client.event
+# async def on_message(message):
+#     if message.author == client.user:
+#         return
+
+#     if client.user in message.mentions:
+#         await message.channel.send(random_text)
+
+
+# client.run(os.environ['DISCORD_TOKEN'])
